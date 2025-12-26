@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""
+ddos_monitor_scapy.py
+Packet-capture based monitor for DoS/DDoS-like symptoms using Scapy (defensive monitoring).
+
+Windows notes:
+ - Install Npcap
+ - Run CMD as Administrator
+ - Prefer setting INTERFACE explicitly if "default" doesn't capture.
+"""
+
+import time
+import os
+import threading
+from collections import Counter, deque
+from scapy.all import sniff, wrpcap, TCP, UDP, IP, get_if_list
+
+# ---------- CONFIG ----------
+INTERFACE = None            # مثال: "Ethernet" أو "Ethernet 2" أو "Npcap Loopback Adapter"
+SAMPLE_INTERVAL = 1         # seconds per sampling tick
+WINDOW = 30                 # sliding window in seconds for moving averages
+PCAP_SAVE_PATH = "captures"
+PCAP_SAVE_SECONDS = 10      # how many seconds to save on alert
+
+# thresholds (كما هي عندك)
+PKTS_PER_SEC_THRESHOLD = 1000
+UNIQUE_SRC_THRESHOLD = 200
+SYN_RATE_PER_SEC_THRESHOLD = 500
+UDP_RATE_PER_SEC_THRESHOLD = 800
+BYTES_PER_SEC_THRESHOLD = 10_000_000
+# -----------------------------
+
+# runtime counters
+pkt_count = 0
+byte_count = 0
+syn_count = 0
+udp_count = 0
+src_counter = Counter()
+recent_pkts = deque()  # (timestamp, packet)
+
+# sliding window history
+history_pkts = deque(maxlen=WINDOW)
+history_bytes = deque(maxlen=WINDOW)
+history_syn = deque(maxlen=WINDOW)
+history_udp = deque(maxlen=WINDOW)
+history_unique_src = deque(maxlen=WINDOW)
+
+# thread-safety
+lock = threading.Lock()
+
+def packet_handler(pkt):
+    global pkt_count, byte_count, syn_count, udp_count, src_counter
+    ts = time.time()
+
+    with lock:
+        recent_pkts.append((ts, pkt))
+        pkt_count += 1
+        try:
+            byte_count += len(pkt)
+        except Exception:
+            pass
+
+        if IP in pkt:
+            src_counter[pkt[IP].src] += 1
+
+        if TCP in pkt:
+            flags = pkt[TCP].flags
+            # SYN and not ACK
+            if (flags & 0x02) and not (flags & 0x10):
+                syn_count += 1
+        elif UDP in pkt:
+            udp_count += 1
+
+def save_recent_pcap(prefix="alert"):
+    if not os.path.exists(PCAP_SAVE_PATH):
+        os.makedirs(PCAP_SAVE_PATH)
+
+    now = time.time()
+    cutoff = now - PCAP_SAVE_SECONDS
+
+    with lock:
+        to_save = [pkt for ts, pkt in recent_pkts if ts >= cutoff]
+
+    if to_save:
+        fname = os.path.join(PCAP_SAVE_PATH, f"{prefix}_{int(now)}.pcap")
+        try:
+            wrpcap(fname, to_save)
+            print(f"[+] Saved pcap: {fname} ({len(to_save)} pkts)")
+        except Exception as e:
+            print("[!] Error saving pcap:", e)
+
+def check_alerts():
+    avg_pkts = sum(history_pkts)/len(history_pkts) if history_pkts else 0
+    avg_bytes = sum(history_bytes)/len(history_bytes) if history_bytes else 0
+    avg_syn = sum(history_syn)/len(history_syn) if history_syn else 0
+    avg_udp = sum(history_udp)/len(history_udp) if history_udp else 0
+    avg_unique_src = sum(history_unique_src)/len(history_unique_src) if history_unique_src else 0
+
+    alerts = []
+    if avg_pkts > PKTS_PER_SEC_THRESHOLD:
+        alerts.append(("High packet rate", avg_pkts))
+    if avg_bytes > BYTES_PER_SEC_THRESHOLD:
+        alerts.append(("High byte rate", avg_bytes))
+    if avg_syn > SYN_RATE_PER_SEC_THRESHOLD:
+        alerts.append(("High SYN rate (possible SYN flood)", avg_syn))
+    if avg_udp > UDP_RATE_PER_SEC_THRESHOLD:
+        alerts.append(("High UDP rate (possible UDP flood)", avg_udp))
+    if avg_unique_src > UNIQUE_SRC_THRESHOLD:
+        alerts.append(("Many distinct sources", avg_unique_src))
+
+    return alerts
+
+def monitor_loop():
+    global pkt_count, byte_count, syn_count, udp_count, src_counter
+
+    print("[*] Starting monitor. Press Ctrl+C to stop.")
+    try:
+        while True:
+            # خذي snapshot آمن من العدادات (بدون ما نصفر أول)
+            with lock:
+                pkts = pkt_count
+                bytes_ = byte_count
+                syns = syn_count
+                udps = udp_count
+                uniq = len(src_counter)
+
+                # صفّر للثانية القادمة
+                pkt_count = 0
+                byte_count = 0
+                syn_count = 0
+                udp_count = 0
+                src_counter = Counter()
+
+            # اطبعي النتائج كل ثانية ✅
+            print(
+                f"[tick] pkts/s={pkts}  bytes/s={bytes_}  "
+                f"SYN/s={syns}  UDP/s={udps}  unique_src={uniq}"
+            )
+
+            # سجّلي القيم للـ moving average
+            history_pkts.append(pkts)
+            history_bytes.append(bytes_)
+            history_syn.append(syns)
+            history_udp.append(udps)
+            history_unique_src.append(uniq)
+
+            alerts = check_alerts()
+            if alerts:
+                print(f"[!] ALERTS at {time.ctime()}:")
+                for k, v in alerts:
+                    if "byte" in k.lower():
+                        print(f"    - {k}: {v/1_000_000:.2f} MB/s (avg)")
+                    else:
+                        print(f"    - {k}: {v:.1f} (avg)")
+                save_recent_pcap(prefix="alert")
+
+            # نظّفي recent_pkts
+            cutoff = time.time() - PCAP_SAVE_SECONDS
+            with lock:
+                while recent_pkts and recent_pkts[0][0] < cutoff:
+                    recent_pkts.popleft()
+
+            time.sleep(SAMPLE_INTERVAL)
+
+    except KeyboardInterrupt:
+        print("\nStopped by user.")
+
+def start_sniff():
+    print("[*] Available interfaces:", get_if_list())
+    print("[*] Sniffing on interface:", INTERFACE or "default")
+    sniff(iface=INTERFACE, prn=packet_handler, store=False)
+
+if __name__ == "__main__":
+    t = threading.Thread(target=start_sniff, daemon=True)
+    t.start()
+    monitor_loop()
