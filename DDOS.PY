@@ -3,7 +3,6 @@ import socks
 import time
 import random
 import threading
-import sys
 
 
 # قائمة User-Agents (مختصرة للتجربة)
@@ -143,4 +142,5 @@ print(f"Total requests sent: {requests_sent}")
 print(f"Duration: {duration} seconds")
 print(f"Average RPS: {requests_sent/duration:.1f}")
 print("="*50)
+
 
