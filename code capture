@@ -15,20 +15,19 @@ import threading
 from collections import Counter, deque
 from scapy.all import sniff, wrpcap, TCP, UDP, IP, get_if_list
 
-# ---------- CONFIG ----------
+# CONFIGURATION
 INTERFACE = None            # مثال: "Ethernet" أو "Ethernet 2" أو "Npcap Loopback Adapter"
 SAMPLE_INTERVAL = 1         # seconds per sampling tick
 WINDOW = 30                 # sliding window in seconds for moving averages
 PCAP_SAVE_PATH = "captures"
 PCAP_SAVE_SECONDS = 10      # how many seconds to save on alert
 
-# thresholds (كما هي عندك)
+# thresholds
 PKTS_PER_SEC_THRESHOLD = 1000
 UNIQUE_SRC_THRESHOLD = 200
 SYN_RATE_PER_SEC_THRESHOLD = 500
 UDP_RATE_PER_SEC_THRESHOLD = 800
 BYTES_PER_SEC_THRESHOLD = 10_000_000
-# -----------------------------
 
 # runtime counters
 pkt_count = 0
@@ -124,20 +123,18 @@ def monitor_loop():
                 udps = udp_count
                 uniq = len(src_counter)
 
-                # صفّر للثانية القادمة
                 pkt_count = 0
                 byte_count = 0
                 syn_count = 0
                 udp_count = 0
                 src_counter = Counter()
 
-            # اطبعي النتائج كل ثانية ✅
             print(
                 f"[tick] pkts/s={pkts}  bytes/s={bytes_}  "
                 f"SYN/s={syns}  UDP/s={udps}  unique_src={uniq}"
             )
 
-            # سجّلي القيم للـ moving average
+            # moving average
             history_pkts.append(pkts)
             history_bytes.append(bytes_)
             history_syn.append(syns)
@@ -154,7 +151,7 @@ def monitor_loop():
                         print(f"    - {k}: {v:.1f} (avg)")
                 save_recent_pcap(prefix="alert")
 
-            # نظّفي recent_pkts
+            # recent_pkts
             cutoff = time.time() - PCAP_SAVE_SECONDS
             with lock:
                 while recent_pkts and recent_pkts[0][0] < cutoff:
