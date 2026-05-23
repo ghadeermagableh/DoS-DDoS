@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# DoS Simulator - Educational Use Only
+# DoS Simulator 
 
 import socket
 import threading
