@@ -16,7 +16,7 @@ from collections import Counter, deque
 from scapy.all import sniff, wrpcap, TCP, UDP, IP, get_if_list
 
 # CONFIGURATION
-INTERFACE = None            # مثال: "Ethernet" أو "Ethernet 2" أو "Npcap Loopback Adapter"
+INTERFACE = None            
 SAMPLE_INTERVAL = 1         # seconds per sampling tick
 WINDOW = 30                 # sliding window in seconds for moving averages
 PCAP_SAVE_PATH = "captures"
@@ -115,7 +115,6 @@ def monitor_loop():
     print("[*] Starting monitor. Press Ctrl+C to stop.")
     try:
         while True:
-            # خذي snapshot آمن من العدادات (بدون ما نصفر أول)
             with lock:
                 pkts = pkt_count
                 bytes_ = byte_count
